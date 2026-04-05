@@ -412,10 +412,13 @@ async function runScan(){
     markets=all;
     log(`Kalshi: ${markets.length} markets fetched.`,'g');
   if(markets.length>0){
+    // Dump ALL fields of first market so we can see exact field names
     const m=markets[0];
-    const priceFields=Object.keys(m).filter(k=>k.includes('ask')||k.includes('bid')||k.includes('price')||k.includes('yes')||k.includes('no'));
-    log('Kalshi price fields: '+priceFields.join(', '),'y');
-    log('Sample values: '+priceFields.slice(0,5).map(k=>k+'='+JSON.stringify(m[k])).join(', '),'y');
+    const allFields=Object.keys(m);
+    log('Kalshi fields: '+allFields.join(', '),'y');
+    // Show all values that look price-related
+    const priceFields=allFields.filter(k=>k.includes('ask')||k.includes('bid')||k.includes('price')||k.includes('yes')||k.includes('no')||k.includes('last'));
+    log('Price fields+vals: '+priceFields.map(k=>k+'='+JSON.stringify(m[k])).join(' | '),'y');
   }
   } catch(ex){log(`Kalshi scan error: ${ex.message}`,'r');}
 
