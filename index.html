@@ -401,6 +401,7 @@ async function runScan(){
   try{
     let all=[],cursor='',pages=0;
     do{
+      // Fetch Kalshi markets - try economics/politics categories
       const qs='?status=open&limit=200'+(cursor?'&cursor='+cursor:'');
       const url=PROXY+'/trade-api/v2/markets'+qs;
       const res=await fetch(url);
@@ -426,8 +427,8 @@ async function runScan(){
   log('Fetching Polymarket US markets...','y');
   try{
     // Try Polymarket US API first
-    // Global Polymarket gamma API - has politics/economics matching Kalshi
-    const polyUrl=PROXY+'/gamma/markets?active=true&limit=200&order=volume24hr&ascending=false';
+    // Global Polymarket gamma API - fetch economics/politics/crypto markets
+    const polyUrl=PROXY+'/gamma/markets?active=true&limit=200&order=volume24hr&ascending=false&tag_id=100,101,102,103,104';
     const pres=await fetch(polyUrl);
     if(pres.ok){
       const pd=await pres.json();
@@ -473,17 +474,45 @@ function analyzeCross(){
   crossOpps=[];
 
   // Pre-process active Kalshi markets
+  // Try every possible Kalshi price field name
+  function getKalshiPrices(m){
+    // Try dollars fields first (newer API)
+    let ya=parseFloat(m.yes_ask_dollars);
+    let na=parseFloat(m.no_ask_dollars);
+    if(!isNaN(ya)&&ya>0) return {ya,na};
+    // Try non-dollar fields
+    ya=parseFloat(m.yes_ask);
+    na=parseFloat(m.no_ask);
+    if(!isNaN(ya)&&ya>0) return {ya,na};
+    // Try last_price style
+    ya=parseFloat(m.yes_price||m.lastYesPrice||m.last_yes_price);
+    na=parseFloat(m.no_price||m.lastNoPrice||m.last_no_price);
+    if(!isNaN(ya)&&ya>0) return {ya,na};
+    // Try best_bid/ask
+    ya=parseFloat(m.best_yes_ask||m.bestYesAsk);
+    na=parseFloat(m.best_no_ask||m.bestNoAsk);
+    if(!isNaN(ya)&&ya>0) return {ya,na};
+    return null;
+  }
+
   const kActive=markets.filter(m=>{
-    const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);
-    const na=parseFloat(m.no_ask_dollars??m.no_ask??0);
-    // More lenient: just needs both sides present and not fully settled
-    return ya>0.02&&na>0.02&&ya<0.98&&na<0.98;
-  }).map(m=>({...m,kws:extractKws(m.title||''),
-    kYes:parseFloat(m.yes_ask_dollars??m.yes_ask??0),
-    kNo:parseFloat(m.no_ask_dollars??m.no_ask??0)}));
-  // Log category breakdown to understand what's active
+    const p=getKalshiPrices(m);
+    if(!p) return false;
+    return p.ya>0.02&&p.na>0.02&&p.ya<0.98&&p.na<0.98;
+  }).map(m=>{
+    const p=getKalshiPrices(m);
+    return {...m,kws:extractKws(m.title||''),kYes:p.ya,kNo:p.na};
+  });
+
+  // Log field names from first market for debugging
+  if(markets.length>0){
+    const m=markets[0];
+    const pf=Object.keys(m).filter(k=>k.includes('ask')||k.includes('bid')||k.includes('price')||k.includes('yes')||k.includes('no'));
+    log('Kalshi price fields: '+pf.map(k=>k+'='+JSON.stringify(m[k])).join(' | ').slice(0,200),'y');
+  }
+
   const cats={};kActive.forEach(m=>{const c=m.category||'Other';cats[c]=(cats[c]||0)+1;});
-  log('Active Kalshi by category: '+Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c,n])=>`${c}:${n}`).join(', '),'y');
+  log(`Active Kalshi: ${kActive.length} markets. Categories: `+Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([c,n])=>`${c}:${n}`).join(', '),'g');
 
   for(const p of polyMarkets){
     // Parse outcomePrices - it's a JSON string like '["0.55","0.45"]'
