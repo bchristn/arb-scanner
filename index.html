@@ -417,21 +417,15 @@ async function runScan(){
   log('Fetching Polymarket US markets...','y');
   try{
     // Try Polymarket US API first
-    const pres=await fetch('https://api.polymarket.us/v1/markets?status=OPEN&limit=100&sortBy=VOLUME&sortDirection=DESC');
+    // Route through our Cloudflare worker to avoid CORS
+    const polyUrl=PROXY+'/gamma/markets?active=true&limit=100&order=volume24hr&ascending=false';
+    const pres=await fetch(polyUrl);
     if(pres.ok){
       const pd=await pres.json();
-      polyMarkets=(pd.markets||pd||[]);
+      polyMarkets=pd||[];
       log(`Polymarket: ${polyMarkets.length} markets fetched.`,'g');
     } else {
-      // Fallback to gamma API
-      const pres2=await fetch('https://gamma-api.polymarket.com/markets?active=true&limit=100&order=volume24hr&ascending=false');
-      if(pres2.ok){
-        const pd2=await pres2.json();
-        polyMarkets=pd2||[];
-        log(`Polymarket (gamma): ${polyMarkets.length} markets fetched.`,'g');
-      } else {
-        log(`Polymarket fetch failed: ${pres.status}`,'r');
-      }
+      log(`Polymarket fetch failed: ${pres.status}`,'r');
     }
   } catch(ex){log(`Polymarket fetch error: ${ex.message}`,'r');}
 
