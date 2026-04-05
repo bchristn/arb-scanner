@@ -227,7 +227,7 @@ td{padding:12px 13px;font-size:12px;vertical-align:middle}
 </div>
 
 <script>
-const PROXY='https://corsproxy.io/?';
+const PROXY='https://royal-feather-e6f8.bchristner2273.workers.dev';
 const BASE='https://api.elections.kalshi.com';
 let markets=[],opps=[],scanTimer=null;
 
@@ -352,7 +352,7 @@ async function connect(){
     const sig=signWithForge(pem,ts,'GET','/trade-api/v2/portfolio/balance');
     log('Signature OK. Contacting Kalshi via proxy...','y');
 
-    const url=PROXY+encodeURIComponent(BASE+'/trade-api/v2/portfolio/balance');
+    const url=PROXY+'/trade-api/v2/portfolio/balance';
     const res=await fetch(url,{headers:{
       'KALSHI-ACCESS-KEY':keyId,
       'KALSHI-ACCESS-TIMESTAMP':ts,
@@ -395,7 +395,7 @@ async function runScan(){
     let all=[],cursor='',pages=0;
     do{
       const qs='?status=open&limit=200'+(cursor?'&cursor='+cursor:'');
-      const url=PROXY+encodeURIComponent(BASE+'/trade-api/v2/markets'+qs);
+      const url=PROXY+'/trade-api/v2/markets'+qs;
       const res=await fetch(url);
       if(!res.ok) throw new Error('Markets fetch: '+res.status);
       const d=await res.json();
