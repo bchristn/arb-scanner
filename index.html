@@ -408,7 +408,7 @@ async function runScan(){
       const d=await res.json();
       all=all.concat(d.markets||[]);
       cursor=d.cursor||'';pages++;
-    } while(cursor&&pages<5);
+    } while(cursor&&pages<8); // fetch up to 1600 markets
     markets=all;
     log(`Kalshi: ${markets.length} markets fetched.`,'g');
   } catch(ex){log(`Kalshi scan error: ${ex.message}`,'r');}
@@ -457,10 +457,14 @@ function analyzeCross(){
   const kActive=markets.filter(m=>{
     const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);
     const na=parseFloat(m.no_ask_dollars??m.no_ask??0);
-    return ya>0&&na>0&&ya<0.99&&na<0.99;
+    // More lenient: just needs both sides present and not fully settled
+    return ya>0.02&&na>0.02&&ya<0.98&&na<0.98;
   }).map(m=>({...m,kws:extractKws(m.title||''),
     kYes:parseFloat(m.yes_ask_dollars??m.yes_ask??0),
     kNo:parseFloat(m.no_ask_dollars??m.no_ask??0)}));
+  // Log category breakdown to understand what's active
+  const cats={};kActive.forEach(m=>{const c=m.category||'Other';cats[c]=(cats[c]||0)+1;});
+  log('Active Kalshi by category: '+Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c,n])=>`${c}:${n}`).join(', '),'y');
 
   for(const p of polyMarkets){
     // Parse outcomePrices - it's a JSON string like '["0.55","0.45"]'
