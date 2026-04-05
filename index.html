@@ -471,8 +471,8 @@ function renderOpps(){
 function renderAll(){
   const badge=document.getElementById('abadge');
   const table=document.getElementById('atable');
-  const top=[...markets].sort((a,b)=>(b.volume||0)-(a.volume||0)).slice(0,25);
-  badge.innerHTML=`<span class="badge bbl">${markets.length} TOTAL</span>`;
+  const active=[...markets].filter(m=>{const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);const na=parseFloat(m.no_ask_dollars??m.no_ask??0);return ya>0&&na>0&&ya<0.99&&na<0.99;});const top=active.sort((a,b)=>(b.volume||0)-(a.volume||0)).slice(0,50);
+  badge.innerHTML=`<span class="badge bbl">${active.length} ACTIVE / ${markets.length} TOTAL</span>`;
   const rows=top.map(m=>{
     const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);
     const na=parseFloat(m.no_ask_dollars??m.no_ask??0);
