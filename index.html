@@ -444,69 +444,82 @@ async function runScan(){
 }
 
 // ── Cross-platform arb (Kalshi vs Polymarket) ─────────────
+function extractKws(str){
+  const stop=new Set(['the','and','for','are','that','this','with','from','will','have','been','they','their','which','than','when','more','also','into','over','does','did','was','has','not','wins','win','beat','beats','game','match','play','who','what','make','gets','get','yes','score','points']);
+  return str.toLowerCase().replace(/[^a-z0-9 ]/g,' ').split(/\s+/).filter(w=>w.length>2&&!stop.has(w)&&isNaN(w));
+}
+
 function analyzeCross(){
   const thr=parseFloat(document.getElementById('mpt').value)||2;
   crossOpps=[];
+
+  // Pre-process active Kalshi markets
+  const kActive=markets.filter(m=>{
+    const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);
+    const na=parseFloat(m.no_ask_dollars??m.no_ask??0);
+    return ya>0&&na>0&&ya<0.99&&na<0.99;
+  }).map(m=>({...m,kws:extractKws(m.title||''),
+    kYes:parseFloat(m.yes_ask_dollars??m.yes_ask??0),
+    kNo:parseFloat(m.no_ask_dollars??m.no_ask??0)}));
+
   for(const p of polyMarkets){
-    const pYes=parseFloat(p.bestAsk||p.outcomePrices?.[0]||0);
-    const pNo=parseFloat(p.bestBid||p.outcomePrices?.[1]||0);
-    if(!pYes||!pNo) continue;
-    const pYesAsk=pYes;
-    const pNoAsk=1-pNo; // Polymarket NO price = 1 - YES bid
+    // Parse outcomePrices - it's a JSON string like '["0.55","0.45"]'
+    let priceArr;
+    try{
+      const raw=p.outcomePrices;
+      priceArr=typeof raw==='string'?JSON.parse(raw):raw;
+    }catch(e){continue;}
+    if(!Array.isArray(priceArr)||priceArr.length<2) continue;
+    const pYes=parseFloat(priceArr[0]);
+    const pNo=parseFloat(priceArr[1]);
+    // Skip settled or invalid markets
+    if(isNaN(pYes)||isNaN(pNo)||pYes<=0.01||pYes>=0.99||pNo<=0.01||pNo>=0.99) continue;
 
-    // Try to find matching Kalshi market by keyword
-    const pTitle=(p.question||p.title||p.market_slug||'').toLowerCase()
-      .replace(/will /g,'').replace(/who /g,'').replace(/what /g,'')
-      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-    for(const k of markets){
-      const kTitle=(k.title||k.ticker||'').toLowerCase()
-        .replace(/will /g,'').replace(/who /g,'').replace(/what /g,'')
-        .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-      const kYes=parseFloat(k.yes_ask_dollars??k.yes_ask??0);
-      const kNo=parseFloat(k.no_ask_dollars??k.no_ask??0);
-      if(!kYes||!kNo||kYes>=0.99||kNo>=0.99) continue;
+    const pTitle=p.question||p.title||'';
+    const pKws=extractKws(pTitle);
+    if(pKws.length<2) continue;
 
-      // Smarter matching: skip common stop words, require 2+ meaningful word overlap
-      const stopWords=new Set(['the','and','for','are','that','this','with','from','will','have','been','they','their','which','than','when','more','also','into','other','some','such','over','then']);
-      const pWords=pTitle.split(' ').filter(w=>w.length>3&&!stopWords.has(w));
-      const kWords=kTitle.split(' ').filter(w=>w.length>3&&!stopWords.has(w));
-      const matches=pWords.filter(w=>kWords.includes(w)).length;
-      const matchScore=matches/Math.min(pWords.length||1, kWords.length||1);
-      if(matches<2||matchScore<0.25) continue;
-
-      // Check arb: buy YES on Poly + NO on Kalshi
-      const spread1=(1-pYesAsk-kNo)*100;
-      // Check arb: buy NO on Poly + YES on Kalshi
-      const spread2=(1-pNoAsk-kYes)*100;
-
-      const bestSpread=Math.max(spread1,spread2);
-      if(bestSpread>=thr){
-        crossOpps.push({
-          kalshiTitle:k.title,kTicker:k.ticker,
-          polyTitle:p.question||p.title,
-          polySlug:p.slug,
-          kYes,kNo,pYesAsk,pNoAsk,
-          spread:bestSpread,
-          leg:spread1>spread2?'Buy YES on Polymarket + NO on Kalshi':'Buy YES on Kalshi + NO on Polymarket',
-          profitPer1k:bestSpread/(spread1>spread2?pYesAsk+kNo:pNoAsk+kYes),
-          kUrl:`https://kalshi.com/markets/${k.ticker}`,
-          pUrl:`https://polymarket.com/event/${p.slug}`
-        });
-        break;
-      }
+    // Find best matching Kalshi market
+    let best=null,bestScore=0;
+    for(const k of kActive){
+      const shared=pKws.filter(w=>k.kws.includes(w)).length;
+      if(shared<2) continue;
+      const score=shared/Math.min(pKws.length,k.kws.length);
+      if(score>bestScore){bestScore=score;best=k;}
     }
+    if(!best||bestScore<0.3) continue;
+
+    // Calculate spreads for both arb legs
+    const spread1=(1-pYes-best.kNo)*100;  // YES on Poly + NO on Kalshi
+    const spread2=(1-pNo-best.kYes)*100;  // NO on Poly + YES on Kalshi
+    const bestSpread=Math.max(spread1,spread2);
+    if(bestSpread<thr) continue;
+
+    const isLeg1=spread1>spread2;
+    const cost=isLeg1?pYes+best.kNo:pNo+best.kYes;
+    crossOpps.push({
+      kalshiTitle:best.title,kTicker:best.ticker,
+      polyTitle:pTitle,polySlug:p.slug||'',
+      kYes:best.kYes,kNo:best.kNo,pYes,pNo,
+      spread:bestSpread,matchScore:Math.round(bestScore*100),
+      leg:isLeg1
+        ?`Buy YES on Polymarket (${(pYes*100).toFixed(1)}¢) + NO on Kalshi (${(best.kNo*100).toFixed(1)}¢)`
+        :`Buy NO on Polymarket (${(pNo*100).toFixed(1)}¢) + YES on Kalshi (${(best.kYes*100).toFixed(1)}¢)`,
+      profitPer1k:bestSpread/cost,
+      kUrl:`https://kalshi.com/markets/${best.ticker}`,
+      pUrl:`https://polymarket.com/event/${p.slug||''}`
+    });
   }
   crossOpps.sort((a,b)=>b.spread-a.spread);
 
-  // Update stats
   const total=opps.length+crossOpps.length;
   document.getElementById('so').textContent=total;
   document.getElementById('sosub').textContent=`${opps.length} Kalshi · ${crossOpps.length} Cross-platform`;
   if(crossOpps.length){
-    const best=crossOpps[0];
-    document.getElementById('ss2').textContent=best.spread.toFixed(1)+'¢';
-    document.getElementById('sp2').textContent='$'+best.profitPer1k.toFixed(2);
+    document.getElementById('ss2').textContent=crossOpps[0].spread.toFixed(1)+'¢';
+    document.getElementById('sp2').textContent='$'+crossOpps[0].profitPer1k.toFixed(2);
   }
+  log(`Cross-platform: matched ${crossOpps.length} opportunities from ${kActive.length} active Kalshi × ${polyMarkets.length} Poly markets.`,'g');
 }
 
 // ── Analyze ──────────────────────────────────────────────
