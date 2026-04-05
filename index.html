@@ -424,6 +424,12 @@ async function runScan(){
       const pd=await pres.json();
       polyMarkets=pd||[];
       log(`Polymarket: ${polyMarkets.length} markets fetched.`,'g');
+      // Log first 3 market titles so we can see the data structure
+      polyMarkets.slice(0,3).forEach((m,i)=>{
+        const title=m.question||m.title||m.market_slug||JSON.stringify(Object.keys(m));
+        const price=m.outcomePrices||m.bestAsk||m.tokens||'?';
+        log(`PM[${i}]: ${String(title).slice(0,60)} | price: ${JSON.stringify(price).slice(0,30)}`,'y');
+      });
     } else {
       log(`Polymarket fetch failed: ${pres.status}`,'r');
     }
