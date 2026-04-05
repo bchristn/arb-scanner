@@ -423,13 +423,23 @@ async function runScan(){
   log('Fetching Polymarket US markets...','y');
   try{
     // Try Polymarket US API first
-    // Route through our Cloudflare worker to avoid CORS
-    const polyUrl=PROXY+'/gamma/markets?active=true&limit=100&order=volume24hr&ascending=false';
+    // Global Polymarket gamma API - has politics/economics matching Kalshi
+    const polyUrl=PROXY+'/gamma/markets?active=true&limit=200&order=volume24hr&ascending=false';
     const pres=await fetch(polyUrl);
     if(pres.ok){
       const pd=await pres.json();
-      polyMarkets=pd||[];
-      log(`Polymarket: ${polyMarkets.length} markets fetched.`,'g');
+      // Filter to only active markets with real two-sided pricing
+      const allPoly=Array.isArray(pd)?pd:(pd.markets||pd||[]);
+      polyMarkets=allPoly.filter(m=>{
+        try{
+          const raw=m.outcomePrices;
+          const arr=typeof raw==='string'?JSON.parse(raw):raw;
+          if(!Array.isArray(arr)||arr.length<2) return false;
+          const y=parseFloat(arr[0]),n=parseFloat(arr[1]);
+          return y>0.02&&y<0.98&&n>0.02&&n<0.98;
+        }catch(e){return false;}
+      });
+      log(`Polymarket global: ${polyMarkets.length} active markets (from ${allPoly.length} total).`,'g');
       // Log first 3 market titles so we can see the data structure
       polyMarkets.slice(0,3).forEach((m,i)=>{
         const title=m.question||m.title||m.market_slug||JSON.stringify(Object.keys(m));
