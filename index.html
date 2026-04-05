@@ -235,7 +235,7 @@ td{padding:12px 13px;font-size:12px;vertical-align:middle}
 const PROXY='https://royal-feather-e6f8.bchristner2273.workers.dev';
 const BASE='https://api.elections.kalshi.com';
 let markets=[],opps=[],polyMarkets=[],crossOpps=[],scanTimer=null;
-const POLY_BASE='https://gamma-api.polymarket.com';
+const POLY_BASE='https://gamma-api.polymarket.com'; // fallback
 
 // ── Logging ──────────────────────────────────────────────
 function log(msg,c=''){
@@ -413,14 +413,25 @@ async function runScan(){
     log(`Kalshi: ${markets.length} markets fetched.`,'g');
   } catch(ex){log(`Kalshi scan error: ${ex.message}`,'r');}
 
-  // Fetch Polymarket public data (no auth needed)
-  log('Fetching Polymarket markets...','y');
+  // Fetch Polymarket US public data (no auth needed)
+  log('Fetching Polymarket US markets...','y');
   try{
-    const pres=await fetch(POLY_BASE+'/markets?active=true&limit=100&order=volume24hr&ascending=false');
+    // Try Polymarket US API first
+    const pres=await fetch('https://api.polymarket.us/v1/markets?status=OPEN&limit=100&sortBy=VOLUME&sortDirection=DESC');
     if(pres.ok){
       const pd=await pres.json();
-      polyMarkets=pd||[];
+      polyMarkets=(pd.markets||pd||[]);
       log(`Polymarket: ${polyMarkets.length} markets fetched.`,'g');
+    } else {
+      // Fallback to gamma API
+      const pres2=await fetch('https://gamma-api.polymarket.com/markets?active=true&limit=100&order=volume24hr&ascending=false');
+      if(pres2.ok){
+        const pd2=await pres2.json();
+        polyMarkets=pd2||[];
+        log(`Polymarket (gamma): ${polyMarkets.length} markets fetched.`,'g');
+      } else {
+        log(`Polymarket fetch failed: ${pres.status}`,'r');
+      }
     }
   } catch(ex){log(`Polymarket fetch error: ${ex.message}`,'r');}
 
@@ -444,18 +455,24 @@ function analyzeCross(){
     const pNoAsk=1-pNo; // Polymarket NO price = 1 - YES bid
 
     // Try to find matching Kalshi market by keyword
-    const pTitle=(p.question||p.title||'').toLowerCase();
+    const pTitle=(p.question||p.title||p.market_slug||'').toLowerCase()
+      .replace(/will /g,'').replace(/who /g,'').replace(/what /g,'')
+      .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
     for(const k of markets){
-      const kTitle=(k.title||'').toLowerCase();
+      const kTitle=(k.title||k.ticker||'').toLowerCase()
+        .replace(/will /g,'').replace(/who /g,'').replace(/what /g,'')
+        .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
       const kYes=parseFloat(k.yes_ask_dollars??k.yes_ask??0);
       const kNo=parseFloat(k.no_ask_dollars??k.no_ask??0);
       if(!kYes||!kNo||kYes>=0.99||kNo>=0.99) continue;
 
-      // Simple keyword matching - look for 3+ word overlap
-      const pWords=pTitle.split(' ').filter(w=>w.length>4);
-      const kWords=kTitle.split(' ').filter(w=>w.length>4);
+      // Smarter matching: skip common stop words, require 2+ meaningful word overlap
+      const stopWords=new Set(['the','and','for','are','that','this','with','from','will','have','been','they','their','which','than','when','more','also','into','other','some','such','over','then']);
+      const pWords=pTitle.split(' ').filter(w=>w.length>3&&!stopWords.has(w));
+      const kWords=kTitle.split(' ').filter(w=>w.length>3&&!stopWords.has(w));
       const matches=pWords.filter(w=>kWords.includes(w)).length;
-      if(matches<2) continue;
+      const matchScore=matches/Math.min(pWords.length||1, kWords.length||1);
+      if(matches<2||matchScore<0.25) continue;
 
       // Check arb: buy YES on Poly + NO on Kalshi
       const spread1=(1-pYesAsk-kNo)*100;
