@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARB SCANNER — Kalshi</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
+<style>
+  :root{--bg:#070a0f;--surface:#0d1117;--surface2:#141b24;--border:#1e2d3d;--accent:#00ff88;--text:#e0eaf5;--muted:#4a6277;--green:#00ff88;--red:#ff4d6d;--yellow:#ffd166}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Space Mono',monospace;min-height:100vh;overflow-x:hidden}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,255,136,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,255,136,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  .wrap{position:relative;z-index:1;max-width:1100px;margin:0 auto;padding:0 18px 60px}
+  header{padding:26px 0 18px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid var(--border);margin-bottom:20px;flex-wrap:wrap;gap:12px}
+  .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(20px,4vw,30px)}
+  .logo em{font-style:normal;color:var(--accent)}
+  .tag{font-size:10px;color:var(--muted);letter-spacing:3px;text-transform:uppercase;margin-top:4px}
+  .hdr-r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);padding:7px 12px;border-radius:4px;font-size:11px;letter-spacing:1px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--red);flex-shrink:0}
+  .dot.on{background:var(--green);animation:pu 2s infinite}
+  @keyframes pu{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,255,136,.4)}50%{opacity:.7;box-shadow:0 0 0 4px rgba(0,255,136,0)}}
+  .panel{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--accent);padding:20px;margin-bottom:16px;border-radius:2px}
+  .panel.yellow{border-top-color:var(--yellow)}
+  .panel.red{border-top-color:var(--red)}
+  .pt{font-family:'Syne',sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .pt.y{color:var(--yellow)}.pt.r{color:var(--red)}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:540px){.g2{grid-template-columns:1fr}}
+  .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+  .fl{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .fi{background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:'Space Mono',monospace;font-size:12px;padding:9px 11px;border-radius:2px;outline:none;transition:border-color .2s;width:100%}
+  .fi:focus{border-color:var(--accent)}.fi::placeholder{color:var(--muted)}
+  textarea.fi{resize:vertical;min-height:110px;font-size:10.5px;line-height:1.5}
+  .pf{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:4px}
+  .pn{font-size:10px;color:var(--muted);line-height:1.6;max-width:360px}
+  .pn span{color:var(--yellow)}
+  .btn{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:2px;text-transform:uppercase;padding:10px 20px;border:none;cursor:pointer;border-radius:2px;transition:all .15s}
+  .bp{background:var(--accent);color:var(--bg);font-weight:700}
+  .bp:hover{background:#00e87a}.bp:disabled{background:var(--muted);cursor:not-allowed}
+  .by{background:var(--yellow);color:var(--bg);font-weight:700}
+  .by:hover{background:#f5c842}
+  .bg2{background:transparent;color:var(--muted);border:1px solid var(--border)}
+  .bg2:hover{border-color:var(--muted);color:var(--text)}
+
+/* Diagnostic box */
+.diag{background:var(–bg);border:1px solid var(–border);border-radius:2px;padding:14px;margin-top:12px;font-size:11px;line-height:1.9}
+.diag-row{display:flex;gap:10px;align-items:flex-start}
+.diag-icon{flex-shrink:0;width:16px;text-align:center}
+.diag-label{color:var(–muted);min-width:140px;flex-shrink:0}
+.diag-val{color:var(–text)}
+.diag-val.g{color:var(–green)}.diag-val.r{color:var(–red)}.diag-val.y{color:var(–yellow)}
+.diag-sep{border:none;border-top:1px solid var(–border);margin:8px 0}
+
+.sr{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+@media(max-width:620px){.sr{grid-template-columns:repeat(2,1fr)}}
+.sc{background:var(–surface);border:1px solid var(–border);padding:13px;border-radius:2px;position:relative;overflow:hidden}
+.sc::before{content:’’;position:absolute;top:0;left:0;right:0;height:2px}
+.sc.g::before{background:var(–green)}.sc.y::before{background:var(–yellow)}.sc.b::before{background:#4d9fff}
+.sl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(–muted);margin-bottom:7px}
+.sv{font-family:‘Syne’,sans-serif;font-weight:800;font-size:clamp(17px,3vw,25px);line-height:1}
+.sv.g{color:var(–green)}.sv.y{color:var(–yellow)}.sv.b{color:#4d9fff}
+.ss{font-size:10px;color:var(–muted);margin-top:5px}
+.cb{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.fg2{display:flex;align-items:center;gap:8px;background:var(–surface);border:1px solid var(–border);padding:7px 11px;border-radius:2px}
+.fgl{font-size:10px;color:var(–muted);letter-spacing:1px;text-transform:uppercase}
+.fgs{background:transparent;border:none;color:var(–text);font-family:‘Space Mono’,monospace;font-size:11px;outline:none;cursor:pointer}
+.fgs option{background:var(–surface2)}
+.sp2{flex:1}.ls{font-size:10px;color:var(–muted);letter-spacing:1px}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;flex-wrap:wrap;gap:8px}
+.st{font-family:‘Syne’,sans-serif;font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase}
+.badge{font-size:10px;padding:3px 8px;border-radius:2px;letter-spacing:1px}
+.bgn{background:rgba(0,255,136,.1);color:var(–green);border:1px solid rgba(0,255,136,.2)}
+.brd{background:rgba(255,77,109,.1);color:var(–red);border:1px solid rgba(255,77,109,.2)}
+.bbl{background:rgba(77,159,255,.1);color:#4d9fff;border:1px solid rgba(77,159,255,.2)}
+.tw{background:var(–surface);border:1px solid var(–border);border-radius:2px;overflow:hidden;margin-bottom:18px}
+table{width:100%;border-collapse:collapse}
+thead tr{border-bottom:1px solid var(–border)}
+th{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(–muted);padding:10px 13px;text-align:left;font-weight:400}
+tbody tr{border-bottom:1px solid rgba(30,45,61,.5);transition:background .15s}
+tbody tr:last-child{border-bottom:none}tbody tr:hover{background:var(–surface2)}
+td{padding:12px 13px;font-size:12px;vertical-align:middle}
+.mn{font-family:‘Syne’,sans-serif;font-weight:600;font-size:13px;max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm{font-size:10px;color:var(–muted);margin-top:3px}
+.pg{color:var(–green);font-weight:700}.pr{color:var(–red);font-weight:700}
+.sb{font-family:‘Syne’,sans-serif;font-weight:800;font-size:15px;color:var(–green)}
+.ab{font-family:‘Space Mono’,monospace;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:6px 11px;border:1px solid var(–accent);background:transparent;color:var(–accent);cursor:pointer;border-radius:2px;transition:all .15s;white-space:nowrap}
+.ab:hover{background:var(–accent);color:var(–bg)}
+.es{padding:46px 20px;text-align:center}
+.ei{font-size:30px;margin-bottom:11px;opacity:.4}
+.et{font-family:‘Syne’,sans-serif;font-weight:800;font-size:14px;color:var(–muted);margin-bottom:5px}
+.ex{font-size:11px;color:var(–muted);line-height:1.7}
+.lp{background:var(–surface);border:1px solid var(–border);border-radius:2px;overflow:hidden;margin-bottom:18px}
+.lh{padding:10px 13px;border-bottom:1px solid var(–border);display:flex;align-items:center;justify-content:space-between}
+.lt{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(–muted)}
+.lb{padding:9px 13px;max-height:160px;overflow-y:auto;font-size:11px;line-height:2}
+.le{display:flex;gap:10px}.lti{color:var(–muted);white-space:nowrap}.lm{color:var(–text)}
+.lm.g{color:var(–green)}.lm.r{color:var(–red)}.lm.y{color:var(–yellow)}
+.mo{position:fixed;inset:0;background:rgba(7,10,15,.92);z-index:100;display:flex;align-items:center;justify-content:center;padding:18px;opacity:0;pointer-events:none;transition:opacity .2s}
+.mo.on{opacity:1;pointer-events:all}
+.md{background:var(–surface);border:1px solid var(–border);border-top:2px solid var(–accent);padding:22px;width:100%;max-width:490px;border-radius:2px;transform:translateY(10px);transition:transform .2s}
+.mo.on .md{transform:translateY(0)}
+.mtt{font-family:‘Syne’,sans-serif;font-weight:800;font-size:16px;margin-bottom:4px}
+.mst{font-size:11px;color:var(–muted);margin-bottom:16px;line-height:1.6}
+.mdt{background:var(–bg);border:1px solid var(–border);padding:13px;border-radius:2px;margin-bottom:14px}
+.dr{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid rgba(30,45,61,.5)}
+.dr:last-child{border-bottom:none}.dk{color:var(–muted)}.dv{font-weight:700}
+.dv.g{color:var(–green)}.dv.y{color:var(–yellow)}
+.mw{background:rgba(255,209,102,.05);border:1px solid rgba(255,209,102,.2);padding:10px;border-radius:2px;font-size:11px;color:var(–yellow);line-height:1.6;margin-bottom:14px}
+.ma{display:flex;gap:10px;justify-content:flex-end}
+@media(max-width:680px){.hm{display:none}td,th{padding:9px 9px}.mn{max-width:145px;font-size:12px}}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(–bg)}::-webkit-scrollbar-thumb{background:var(–border)}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="logo">ARB<em>_</em>SCANNER</div>
+      <div class="tag">Prediction Market Arbitrage · Kalshi Engine v4</div>
+    </div>
+    <div class="hdr-r">
+      <div class="pill"><div class="dot" id="sdot"></div><span id="stxt">NOT CONNECTED</span></div>
+      <div class="pill" id="bpill" style="display:none"><span style="color:var(--muted);margin-right:4px">BAL</span><span id="bval" style="color:var(--green);font-weight:700">—</span></div>
+    </div>
+  </header>
+
+  <!-- STEP 1: Diagnose Key -->
+
+  <div class="panel yellow" id="diag-panel">
+    <div class="pt y">// Step 1 — Diagnose Your Key</div>
+    <div class="fg">
+      <label class="fl">Paste Private Key (.pem contents)</label>
+      <textarea class="fi" id="pkey" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;MIIEow...&#10;-----END RSA PRIVATE KEY-----" oninput="autoDiagnose()"></textarea>
+    </div>
+    <button class="btn by" onclick="diagnose()">DIAGNOSE KEY</button>
+    <div id="diag-result" style="display:none" class="diag"></div>
+  </div>
+
+  <!-- STEP 2: Connect -->
+
+  <div class="panel" id="conn-panel">
+    <div class="pt">// Step 2 — Connect to Kalshi</div>
+    <div class="g2">
+      <div class="fg">
+        <label class="fl">Key ID</label>
+        <input class="fi" id="kid" type="text" placeholder="2d7b0f4e-65b2-4975-87d1-..."/>
+      </div>
+      <div class="fg">
+        <label class="fl">Min Spread Threshold (¢)</label>
+        <input class="fi" id="mpt" type="number" value="2" min="0.5" max="20" step="0.5"/>
+      </div>
+    </div>
+    <div class="pf">
+      <div class="pn"><span>⚠ Keys stay in browser only.</span> Signing is local. Requests proxy via corsproxy.io.</div>
+      <button class="btn bp" id="cbtn" onclick="connect()">CONNECT + SCAN</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+
+  <div class="sr" id="srow" style="display:none">
+    <div class="sc g"><div class="sl">Arb Opportunities</div><div class="sv g" id="so">—</div><div class="ss" id="sosub">above threshold</div></div>
+    <div class="sc y"><div class="sl">Best Spread</div><div class="sv y" id="ss2">—</div><div class="ss">highest available</div></div>
+    <div class="sc b"><div class="sl">Markets Scanned</div><div class="sv b" id="sm">—</div><div class="ss">active on Kalshi</div></div>
+    <div class="sc g"><div class="sl">Profit / $1,000</div><div class="sv g" id="sp2">—</div><div class="ss">best opportunity</div></div>
+  </div>
+
+  <!-- Controls -->
+
+  <div class="cb" id="cbar" style="display:none">
+    <div class="fg2"><span class="fgl">Category</span>
+      <select class="fgs" id="cf" onchange="renderOpps()">
+        <option value="">All</option><option>Politics</option><option>Economics</option><option>Sports</option><option>Crypto</option><option>Culture</option>
+      </select>
+    </div>
+    <div class="fg2"><span class="fgl">Sort</span>
+      <select class="fgs" id="sf" onchange="renderOpps()">
+        <option value="spread">Spread</option><option value="profit">Profit/$1k</option><option value="volume">Volume</option>
+      </select>
+    </div>
+    <div class="sp2"></div>
+    <span class="ls" id="lscan"></span>
+    <button class="btn bg2" onclick="runScan()">↻ RESCAN</button>
+  </div>
+
+  <!-- Opportunities -->
+
+  <div id="osec" style="display:none">
+    <div class="sh"><div class="st">// Arbitrage Opportunities</div><div id="obadge"></div></div>
+    <div class="tw" id="otable"></div>
+  </div>
+
+  <!-- All Markets -->
+
+  <div id="asec" style="display:none">
+    <div class="sh"><div class="st">// Top Markets by Volume</div><div id="abadge"></div></div>
+    <div class="tw" id="atable"></div>
+  </div>
+
+  <!-- Log -->
+
+  <div class="lp">
+    <div class="lh"><span class="lt">// System Log</span><button class="btn bg2" style="padding:3px 8px;font-size:9px" onclick="document.getElementById('lb').innerHTML=''">CLEAR</button></div>
+    <div class="lb" id="lb"></div>
+  </div>
+
+</div>
+
+<!-- Modal -->
+
+<div class="mo" id="modal">
+  <div class="md">
+    <div class="mtt" id="mtt"></div>
+    <div class="mst" id="mst"></div>
+    <div class="mdt" id="mdt"></div>
+    <div class="mw">⚠ Always verify settlement criteria before trading. Confirm exact resolution rules on Kalshi before placing both legs.</div>
+    <div class="ma">
+      <button class="btn bg2" onclick="closeModal()">CANCEL</button>
+      <button class="btn bp" id="mbtn">VIEW ON KALSHI ↗</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROXY='https://corsproxy.io/?';
+const BASE='https://api.elections.kalshi.com';
+let markets=[],opps=[],scanTimer=null;
+
+// ── Logging ──────────────────────────────────────────────
+function log(msg,c=''){
+  const b=document.getElementById('lb');
+  const t=new Date().toTimeString().slice(0,8);
+  b.innerHTML+=`<div class="le"><span class="lti">${t}</span><span class="lm ${c}">${msg}</span></div>`;
+  b.scrollTop=b.scrollHeight;
+}
+
+// ── Key Diagnostics ──────────────────────────────────────
+function autoDiagnose(){
+  const pem=document.getElementById('pkey').value.trim();
+  if(pem.length>20) diagnose();
+}
+
+function diagnose(){
+  const raw=document.getElementById('pkey').value;
+  const pem=raw.trim();
+  const box=document.getElementById('diag-result');
+  box.style.display='block';
+
+  let rows=[];
+
+  // 1. Length
+  const len=pem.length;
+  rows.push(row('📏','Characters pasted',len, len>100?'g':'r', len>100?'OK':'Too short — may be incomplete'));
+
+  // 2. Detect format
+  const isRSA=pem.includes('BEGIN RSA PRIVATE KEY');
+  const isPKCS8=pem.includes('BEGIN PRIVATE KEY');
+  const hasBegin=isRSA||isPKCS8;
+  const fmt=isRSA?'RSA (traditional)':isPKCS8?'PKCS8':'Unknown';
+  rows.push(row('🔑','Key format detected',fmt, hasBegin?'g':'r', hasBegin?'Supported':'No BEGIN header found'));
+
+  // 3. Has END line
+  const hasEnd=pem.includes('END RSA PRIVATE KEY')||pem.includes('END PRIVATE KEY');
+  rows.push(row('📄','END line present',hasEnd?'Yes':'No', hasEnd?'g':'r', hasEnd?'OK':'Missing END line'));
+
+  // 4. Hidden chars / line endings
+  const hasCR=raw.includes('\r');
+  const hasTab=raw.includes('\t');
+  rows.push(row('🔍','Windows line endings (\\r)',hasCR?'YES':'No', hasCR?'y':'g', hasCR?'May cause issues — try pasting in Notes app first':'OK'));
+  rows.push(row('🔍','Tab characters',hasTab?'YES':'No', hasTab?'y':'g', hasTab?'May cause issues':'OK'));
+
+  // 5. Try to parse with forge
+  let parseOk=false, parseErr='';
+  try{
+    if(isRSA){
+      const k=forge.pki.privateKeyFromPem(pem);
+      parseOk=!!k.n; // has modulus = valid RSA key
+    } else if(isPKCS8){
+      const info=forge.pki.privateKeyInfoFromPem(pem);
+      const k=forge.pki.privateKeyFromAsn1(info);
+      parseOk=!!k.n;
+    } else {
+      parseErr='Cannot parse — unknown format';
+    }
+  } catch(ex){ parseErr=ex.message; }
+
+  rows.push(row('⚙️','Forge can parse key',parseOk?'YES':'FAILED', parseOk?'g':'r', parseOk?'Key is valid and ready to use':parseErr));
+
+  // 6. Try a test sign
+  let signOk=false, signErr='';
+  if(parseOk){
+    try{
+      const sig=signWithForge(pem,'1234567890','GET','/trade-api/v2/portfolio/balance');
+      signOk=sig.length>10;
+    } catch(ex){ signErr=ex.message; }
+    rows.push(row('✍️','Test signature',signOk?'SUCCESS':'FAILED', signOk?'g':'r', signOk?'Signing works — ready to connect':signErr));
+  }
+
+  // Summary
+  const allGood=hasBegin&&hasEnd&&parseOk&&signOk;
+  const summary=allGood
+    ? '✅ Key looks good! Enter your Key ID above and hit CONNECT + SCAN.'
+    : '❌ Key has issues. See red rows above. Common fix: open the .pem file in your phone\'s Files app → copy all text from there.';
+
+  box.innerHTML=`${rows.join('')}<hr class="diag-sep"><div class="diag-row"><span class="diag-icon">${allGood?'✅':'❌'}</span><span class="diag-val ${allGood?'g':'r'}" style="font-weight:700">${summary}</span></div>`;
+
+  if(allGood) log('Key diagnostic passed — ready to connect.','g');
+  else log('Key diagnostic found issues — check the yellow panel.','y');
+}
+
+function row(icon,label,val,cls,note){
+  return `<div class="diag-row"><span class="diag-icon">${icon}</span><span class="diag-label">${label}</span><span class="diag-val ${cls}">${val}</span><span class="diag-val" style="color:var(--muted);margin-left:10px;font-size:10px">${note}</span></div>`;
+}
+
+// ── Signing ──────────────────────────────────────────────
+function signWithForge(pemStr,ts,method,path){
+  const msg=ts+method+path.split('?')[0];
+  const pem=pemStr.trim();
+  let privateKey;
+  if(pem.includes('BEGIN RSA PRIVATE KEY')){
+    privateKey=forge.pki.privateKeyFromPem(pem);
+  } else if(pem.includes('BEGIN PRIVATE KEY')){
+    const p8=forge.pki.privateKeyInfoFromPem(pem);
+    privateKey=forge.pki.privateKeyFromAsn1(p8);
+  } else {
+    throw new Error('Unrecognized key format');
+  }
+  const md=forge.md.sha256.create();
+  md.update(msg,'utf8');
+  const pss=forge.pss.create({md:forge.md.sha256.create(),mgf:forge.mgf.mgf1.create(forge.md.sha256.create()),saltLength:32});
+  return forge.util.encode64(privateKey.sign(md,pss));
+}
+
+// ── Connect ──────────────────────────────────────────────
+async function connect(){
+  const keyId=document.getElementById('kid').value.trim();
+  const pem=document.getElementById('pkey').value.trim();
+  if(!keyId){log('Enter your Key ID.','r');return;}
+  if(!pem||!pem.includes('BEGIN')){log('Paste your private key in Step 1 first.','r');return;}
+
+  const btn=document.getElementById('cbtn');
+  btn.disabled=true;btn.textContent='CONNECTING...';
+  log('Signing request...','y');
+
+  try{
+    const ts=Date.now().toString();
+    const sig=signWithForge(pem,ts,'GET','/trade-api/v2/portfolio/balance');
+    log('Signature OK. Contacting Kalshi via proxy...','y');
+
+    const url=PROXY+encodeURIComponent(BASE+'/trade-api/v2/portfolio/balance');
+    const res=await fetch(url,{headers:{
+      'KALSHI-ACCESS-KEY':keyId,
+      'KALSHI-ACCESS-TIMESTAMP':ts,
+      'KALSHI-ACCESS-SIGNATURE':sig,
+      'Content-Type':'application/json'
+    }});
+
+    const body=await res.text();
+    if(!res.ok) throw new Error(`Kalshi ${res.status}: ${body.slice(0,150)}`);
+
+    const data=JSON.parse(body);
+    const bal=data.balance!=null?'$'+(data.balance/100).toFixed(2):'N/A';
+
+    document.getElementById('sdot').className='dot on';
+    document.getElementById('stxt').textContent='KALSHI LIVE';
+    document.getElementById('bpill').style.display='flex';
+    document.getElementById('bval').textContent=bal;
+    log(`✓ Connected! Balance: ${bal}`,'g');
+    btn.textContent='✓ CONNECTED';
+
+    document.getElementById('srow').style.display='grid';
+    document.getElementById('cbar').style.display='flex';
+    document.getElementById('osec').style.display='block';
+    document.getElementById('asec').style.display='block';
+
+    await runScan();
+    if(scanTimer) clearInterval(scanTimer);
+    scanTimer=setInterval(runScan,60000);
+
+  } catch(ex){
+    log(`✗ ${ex.message}`,'r');
+    btn.disabled=false;btn.textContent='CONNECT + SCAN';
+  }
+}
+
+// ── Scan ─────────────────────────────────────────────────
+async function runScan(){
+  log('Fetching open markets...','y');
+  try{
+    let all=[],cursor='',pages=0;
+    do{
+      const qs='?status=open&limit=200'+(cursor?'&cursor='+cursor:'');
+      const url=PROXY+encodeURIComponent(BASE+'/trade-api/v2/markets'+qs);
+      const res=await fetch(url);
+      if(!res.ok) throw new Error('Markets fetch: '+res.status);
+      const d=await res.json();
+      all=all.concat(d.markets||[]);
+      cursor=d.cursor||'';pages++;
+    } while(cursor&&pages<5);
+    markets=all;
+    log(`Fetched ${markets.length} open markets.`,'g');
+    analyze();renderOpps();renderAll();
+    document.getElementById('lscan').textContent='SCAN '+new Date().toTimeString().slice(0,8);
+  } catch(ex){log(`Scan error: ${ex.message}`,'r');}
+}
+
+// ── Analyze ──────────────────────────────────────────────
+function analyze(){
+  const thr=parseFloat(document.getElementById('mpt').value)||2;
+  opps=[];
+  for(const m of markets){
+    const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);
+    const na=parseFloat(m.no_ask_dollars??m.no_ask??0);
+    if(ya<=0||na<=0) continue;
+    const sc=(1-ya-na)*100;
+    if(sc>=thr) opps.push({ticker:m.ticker,title:m.title||m.ticker,category:m.category||'Other',
+      yesAsk:ya,noAsk:na,combined:ya+na,spreadCents:sc,profitPer1k:sc/(ya+na),
+      volume:m.volume||0,closeTime:m.close_time,url:`https://kalshi.com/markets/${m.ticker}`});
+  }
+  opps.sort((a,b)=>b.spreadCents-a.spreadCents);
+  document.getElementById('sm').textContent=markets.length;
+  document.getElementById('so').textContent=opps.length;
+  document.getElementById('sosub').textContent=`≥ ${thr}¢ threshold`;
+  if(opps.length){
+    document.getElementById('ss2').textContent=opps[0].spreadCents.toFixed(1)+'¢';
+    document.getElementById('sp2').textContent='$'+opps[0].profitPer1k.toFixed(2);
+  } else {
+    document.getElementById('ss2').textContent='—';document.getElementById('sp2').textContent='—';
+  }
+}
+
+// ── Render Opps ──────────────────────────────────────────
+function renderOpps(){
+  if(!markets.length) return;
+  const cat=document.getElementById('cf').value;
+  const srt=document.getElementById('sf').value;
+  let list=cat?opps.filter(o=>o.category.includes(cat)):[...opps];
+  if(srt==='profit') list.sort((a,b)=>b.profitPer1k-a.profitPer1k);
+  else if(srt==='volume') list.sort((a,b)=>b.volume-a.volume);
+  else list.sort((a,b)=>b.spreadCents-a.spreadCents);
+  const badge=document.getElementById('obadge');
+  const table=document.getElementById('otable');
+  if(!list.length){
+    badge.innerHTML=`<span class="badge brd">0 FOUND</span>`;
+    table.innerHTML=`<div class="es"><div class="ei">◎</div><div class="et">No opportunities found</div><div class="ex">Markets are efficiently priced right now.<br>Lower the threshold or hit Rescan.</div></div>`;
+    return;
+  }
+  badge.innerHTML=`<span class="badge bgn">${list.length} FOUND</span>`;
+  const rows=list.map(o=>{
+    const cl=o.closeTime?new Date(o.closeTime).toLocaleDateString():'—';
+    const vl=o.volume>1000?'$'+(o.volume/1000).toFixed(1)+'k':'$'+o.volume;
+    return `<tr>
+      <td><div class="mn">${e(o.title)}</div><div class="mm">${e(o.ticker)} · Closes ${cl}</div></td>
+      <td class="hm"><span class="badge" style="background:rgba(255,209,102,.08);color:var(--yellow);border:1px solid rgba(255,209,102,.15);font-size:9px">${e(o.category)}</span></td>
+      <td class="pg">${(o.yesAsk*100).toFixed(1)}¢</td><td class="pr">${(o.noAsk*100).toFixed(1)}¢</td>
+      <td><span class="sb">+${o.spreadCents.toFixed(1)}¢</span></td>
+      <td class="pg hm">$${o.profitPer1k.toFixed(2)}</td>
+      <td class="hm" style="color:var(--muted);font-size:11px">${vl}</td>
+      <td><button class="ab" onclick='openModal(${JSON.stringify(o)})'>DETAILS</button></td>
+    </tr>`;
+  }).join('');
+  table.innerHTML=`<table><thead><tr><th>Market</th><th class="hm">Category</th><th>YES Ask</th><th>NO Ask</th><th>Spread</th><th class="hm">Profit/$1k</th><th class="hm">Volume</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Render All ───────────────────────────────────────────
+function renderAll(){
+  const badge=document.getElementById('abadge');
+  const table=document.getElementById('atable');
+  const top=[...markets].sort((a,b)=>(b.volume||0)-(a.volume||0)).slice(0,25);
+  badge.innerHTML=`<span class="badge bbl">${markets.length} TOTAL</span>`;
+  const rows=top.map(m=>{
+    const ya=parseFloat(m.yes_ask_dollars??m.yes_ask??0);
+    const na=parseFloat(m.no_ask_dollars??m.no_ask??0);
+    const sc=ya>0&&na>0?((1-ya-na)*100).toFixed(1):null;
+    const cls=sc!=null?(parseFloat(sc)>0?'pg':'pr'):'';
+    const vl=(m.volume||0)>1000?'$'+((m.volume||0)/1000).toFixed(1)+'k':'$'+(m.volume||0);
+    return `<tr>
+      <td><div class="mn">${e(m.title||m.ticker)}</div><div class="mm">${e(m.ticker)}</div></td>
+      <td class="hm" style="color:var(--muted);font-size:11px">${e(m.category||'—')}</td>
+      <td class="pg" style="font-size:12px">${ya>0?(ya*100).toFixed(1)+'¢':'—'}</td>
+      <td class="pr" style="font-size:12px">${na>0?(na*100).toFixed(1)+'¢':'—'}</td>
+      <td class="${cls}" style="font-size:12px;font-weight:700">${sc!=null?(parseFloat(sc)>0?'+':'')+sc+'¢':'—'}</td>
+      <td class="hm" style="color:var(--muted);font-size:11px">${vl}</td>
+    </tr>`;
+  }).join('');
+  table.innerHTML=`<table><thead><tr><th>Market</th><th class="hm">Category</th><th>YES Ask</th><th>NO Ask</th><th>Spread</th><th class="hm">Volume</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Modal ────────────────────────────────────────────────
+function openModal(o){
+  const cl=o.closeTime?new Date(o.closeTime).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}):'Unknown';
+  document.getElementById('mtt').textContent=o.title.length>52?o.title.slice(0,52)+'…':o.title;
+  document.getElementById('mst').textContent=`${o.ticker} · ${o.category}`;
+  document.getElementById('mdt').innerHTML=`
+    <div class="dr"><span class="dk">YES Ask</span><span class="dv g">${(o.yesAsk*100).toFixed(2)}¢</span></div>
+    <div class="dr"><span class="dk">NO Ask</span><span class="dv g">${(o.noAsk*100).toFixed(2)}¢</span></div>
+    <div class="dr"><span class="dk">Combined Cost</span><span class="dv">${(o.combined*100).toFixed(2)}¢</span></div>
+    <div class="dr"><span class="dk">Gross Spread</span><span class="dv g">+${o.spreadCents.toFixed(2)}¢</span></div>
+    <div class="dr"><span class="dk">Est. Profit / $1,000</span><span class="dv g">$${o.profitPer1k.toFixed(2)}</span></div>
+    <div class="dr"><span class="dk">Market Closes</span><span class="dv y">${cl}</span></div>`;
+  document.getElementById('mbtn').onclick=()=>window.open(o.url,'_blank');
+  document.getElementById('modal').classList.add('on');
+}
+function closeModal(){document.getElementById('modal').classList.remove('on');}
+document.getElementById('modal').addEventListener('click',ev=>{if(ev.target===document.getElementById('modal'))closeModal();});
+function e(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+log('ARB_SCANNER v4 ready. Paste your key in Step 1 to diagnose it first.');
+</script>
+
+</body>
+</html>
