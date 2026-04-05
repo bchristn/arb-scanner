@@ -197,6 +197,11 @@ td{padding:12px 13px;font-size:12px;vertical-align:middle}
 
   <!-- All Markets -->
 
+  <div id="csec" style="display:none">
+    <div class="sh"><div class="st">// Cross-Platform Arb (Kalshi vs Polymarket)</div><div id="cbadge"></div></div>
+    <div class="tw" id="ctable"></div>
+  </div>
+
   <div id="asec" style="display:none">
     <div class="sh"><div class="st">// Top Markets by Volume</div><div id="abadge"></div></div>
     <div class="tw" id="atable"></div>
@@ -229,7 +234,8 @@ td{padding:12px 13px;font-size:12px;vertical-align:middle}
 <script>
 const PROXY='https://royal-feather-e6f8.bchristner2273.workers.dev';
 const BASE='https://api.elections.kalshi.com';
-let markets=[],opps=[],scanTimer=null;
+let markets=[],opps=[],polyMarkets=[],crossOpps=[],scanTimer=null;
+const POLY_BASE='https://gamma-api.polymarket.com';
 
 // ── Logging ──────────────────────────────────────────────
 function log(msg,c=''){
@@ -376,6 +382,7 @@ async function connect(){
     document.getElementById('srow').style.display='grid';
     document.getElementById('cbar').style.display='flex';
     document.getElementById('osec').style.display='block';
+    document.getElementById('csec').style.display='block';
     document.getElementById('asec').style.display='block';
 
     await runScan();
@@ -390,7 +397,7 @@ async function connect(){
 
 // ── Scan ─────────────────────────────────────────────────
 async function runScan(){
-  log('Fetching open markets...','y');
+  log('Fetching Kalshi markets...','y');
   try{
     let all=[],cursor='',pages=0;
     do{
@@ -403,10 +410,86 @@ async function runScan(){
       cursor=d.cursor||'';pages++;
     } while(cursor&&pages<5);
     markets=all;
-    log(`Fetched ${markets.length} open markets.`,'g');
-    analyze();renderOpps();renderAll();
-    document.getElementById('lscan').textContent='SCAN '+new Date().toTimeString().slice(0,8);
-  } catch(ex){log(`Scan error: ${ex.message}`,'r');}
+    log(`Kalshi: ${markets.length} markets fetched.`,'g');
+  } catch(ex){log(`Kalshi scan error: ${ex.message}`,'r');}
+
+  // Fetch Polymarket public data (no auth needed)
+  log('Fetching Polymarket markets...','y');
+  try{
+    const pres=await fetch(POLY_BASE+'/markets?active=true&limit=100&order=volume24hr&ascending=false');
+    if(pres.ok){
+      const pd=await pres.json();
+      polyMarkets=pd||[];
+      log(`Polymarket: ${polyMarkets.length} markets fetched.`,'g');
+    }
+  } catch(ex){log(`Polymarket fetch error: ${ex.message}`,'r');}
+
+  analyze();
+  analyzeCross();
+  renderOpps();
+  renderCross();
+  renderAll();
+  document.getElementById('lscan').textContent='SCAN '+new Date().toTimeString().slice(0,8);
+}
+
+// ── Cross-platform arb (Kalshi vs Polymarket) ─────────────
+function analyzeCross(){
+  const thr=parseFloat(document.getElementById('mpt').value)||2;
+  crossOpps=[];
+  for(const p of polyMarkets){
+    const pYes=parseFloat(p.bestAsk||p.outcomePrices?.[0]||0);
+    const pNo=parseFloat(p.bestBid||p.outcomePrices?.[1]||0);
+    if(!pYes||!pNo) continue;
+    const pYesAsk=pYes;
+    const pNoAsk=1-pNo; // Polymarket NO price = 1 - YES bid
+
+    // Try to find matching Kalshi market by keyword
+    const pTitle=(p.question||p.title||'').toLowerCase();
+    for(const k of markets){
+      const kTitle=(k.title||'').toLowerCase();
+      const kYes=parseFloat(k.yes_ask_dollars??k.yes_ask??0);
+      const kNo=parseFloat(k.no_ask_dollars??k.no_ask??0);
+      if(!kYes||!kNo||kYes>=0.99||kNo>=0.99) continue;
+
+      // Simple keyword matching - look for 3+ word overlap
+      const pWords=pTitle.split(' ').filter(w=>w.length>4);
+      const kWords=kTitle.split(' ').filter(w=>w.length>4);
+      const matches=pWords.filter(w=>kWords.includes(w)).length;
+      if(matches<2) continue;
+
+      // Check arb: buy YES on Poly + NO on Kalshi
+      const spread1=(1-pYesAsk-kNo)*100;
+      // Check arb: buy NO on Poly + YES on Kalshi
+      const spread2=(1-pNoAsk-kYes)*100;
+
+      const bestSpread=Math.max(spread1,spread2);
+      if(bestSpread>=thr){
+        crossOpps.push({
+          kalshiTitle:k.title,kTicker:k.ticker,
+          polyTitle:p.question||p.title,
+          polySlug:p.slug,
+          kYes,kNo,pYesAsk,pNoAsk,
+          spread:bestSpread,
+          leg:spread1>spread2?'Buy YES on Polymarket + NO on Kalshi':'Buy YES on Kalshi + NO on Polymarket',
+          profitPer1k:bestSpread/(spread1>spread2?pYesAsk+kNo:pNoAsk+kYes),
+          kUrl:`https://kalshi.com/markets/${k.ticker}`,
+          pUrl:`https://polymarket.com/event/${p.slug}`
+        });
+        break;
+      }
+    }
+  }
+  crossOpps.sort((a,b)=>b.spread-a.spread);
+
+  // Update stats
+  const total=opps.length+crossOpps.length;
+  document.getElementById('so').textContent=total;
+  document.getElementById('sosub').textContent=`${opps.length} Kalshi · ${crossOpps.length} Cross-platform`;
+  if(crossOpps.length){
+    const best=crossOpps[0];
+    document.getElementById('ss2').textContent=best.spread.toFixed(1)+'¢';
+    document.getElementById('sp2').textContent='$'+best.profitPer1k.toFixed(2);
+  }
 }
 
 // ── Analyze ──────────────────────────────────────────────
@@ -465,6 +548,35 @@ function renderOpps(){
     </tr>`;
   }).join('');
   table.innerHTML=`<table><thead><tr><th>Market</th><th class="hm">Category</th><th>YES Ask</th><th>NO Ask</th><th>Spread</th><th class="hm">Profit/$1k</th><th class="hm">Volume</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Render Cross-Platform Opps ───────────────────────────
+function renderCross(){
+  const badge=document.getElementById('cbadge');
+  const table=document.getElementById('ctable');
+  if(!crossOpps.length){
+    badge.innerHTML=`<span class="badge brd">0 FOUND</span>`;
+    table.innerHTML=`<div class="es"><div class="ei">⇄</div><div class="et">No cross-platform opportunities</div><div class="ex">Kalshi and Polymarket are pricing<br>equivalent markets similarly right now.</div></div>`;
+    return;
+  }
+  badge.innerHTML=`<span class="badge bgn">${crossOpps.length} FOUND</span>`;
+  const rows=crossOpps.map(o=>`<tr>
+    <td>
+      <div class="mn">${e(o.kalshiTitle)}</div>
+      <div class="mm" style="color:#4d9fff">↔ ${e(o.polyTitle)}</div>
+    </td>
+    <td class="hm"><span class="badge" style="background:rgba(77,159,255,.1);color:#4d9fff;border:1px solid rgba(77,159,255,.2);font-size:9px">CROSS-PLAT</span></td>
+    <td class="pg">${(o.kYes*100).toFixed(1)}¢</td>
+    <td class="pr">${(o.kNo*100).toFixed(1)}¢</td>
+    <td style="color:#4d9fff;font-size:10px;max-width:120px">${e(o.leg)}</td>
+    <td><span class="sb">+${o.spread.toFixed(1)}¢</span></td>
+    <td class="pg hm">$${o.profitPer1k.toFixed(2)}</td>
+    <td>
+      <button class="ab" onclick="window.open('${o.kUrl}','_blank')" style="margin-bottom:4px;display:block">KALSHI ↗</button>
+      <button class="ab" onclick="window.open('${o.pUrl}','_blank')" style="display:block">POLY ↗</button>
+    </td>
+  </tr>`).join('');
+  table.innerHTML=`<table><thead><tr><th>Markets</th><th class="hm">Type</th><th>K-YES</th><th>K-NO</th><th class="hm">Trade</th><th>Spread</th><th class="hm">Profit/$1k</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // ── Render All ───────────────────────────────────────────
