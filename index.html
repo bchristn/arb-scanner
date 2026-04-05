@@ -411,6 +411,12 @@ async function runScan(){
     } while(cursor&&pages<8); // fetch up to 1600 markets
     markets=all;
     log(`Kalshi: ${markets.length} markets fetched.`,'g');
+  if(markets.length>0){
+    const m=markets[0];
+    const priceFields=Object.keys(m).filter(k=>k.includes('ask')||k.includes('bid')||k.includes('price')||k.includes('yes')||k.includes('no'));
+    log('Kalshi price fields: '+priceFields.join(', '),'y');
+    log('Sample values: '+priceFields.slice(0,5).map(k=>k+'='+JSON.stringify(m[k])).join(', '),'y');
+  }
   } catch(ex){log(`Kalshi scan error: ${ex.message}`,'r');}
 
   // Fetch Polymarket US public data (no auth needed)
