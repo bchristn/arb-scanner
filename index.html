@@ -428,7 +428,7 @@ async function runScan(){
   try{
     // Try Polymarket US API first
     // Global Polymarket gamma API - fetch economics/politics/crypto markets
-    const polyUrl=PROXY+'/gamma/markets?active=true&limit=200&order=volume24hr&ascending=false&tag_id=100,101,102,103,104';
+    const polyUrl=PROXY+'/gamma/markets?active=true&limit=200&order=volume24hr&ascending=false';
     const pres=await fetch(polyUrl);
     if(pres.ok){
       const pd=await pres.json();
@@ -476,22 +476,36 @@ function analyzeCross(){
   // Pre-process active Kalshi markets
   // Try every possible Kalshi price field name
   function getKalshiPrices(m){
-    // Try dollars fields first (newer API)
-    let ya=parseFloat(m.yes_ask_dollars);
-    let na=parseFloat(m.no_ask_dollars);
-    if(!isNaN(ya)&&ya>0) return {ya,na};
-    // Try non-dollar fields
-    ya=parseFloat(m.yes_ask);
-    na=parseFloat(m.no_ask);
-    if(!isNaN(ya)&&ya>0) return {ya,na};
-    // Try last_price style
-    ya=parseFloat(m.yes_price||m.lastYesPrice||m.last_yes_price);
-    na=parseFloat(m.no_price||m.lastNoPrice||m.last_no_price);
-    if(!isNaN(ya)&&ya>0) return {ya,na};
-    // Try best_bid/ask
-    ya=parseFloat(m.best_yes_ask||m.bestYesAsk);
-    na=parseFloat(m.best_no_ask||m.bestNoAsk);
-    if(!isNaN(ya)&&ya>0) return {ya,na};
+    // Kalshi API returns prices in various formats - try all known field names
+    const fields=[
+      // Dollars format (newer)
+      [m.yes_ask_dollars, m.no_ask_dollars],
+      // Non-dollar format
+      [m.yes_ask, m.no_ask],
+      // Price format
+      [m.yes_price, m.no_price],
+      // Last price
+      [m.last_yes_price, m.last_no_price],
+      // Best ask
+      [m.best_yes_ask, m.best_no_ask],
+      // Previous price as fallback
+      [m.previous_price, null],
+    ];
+    for(const [yRaw,nRaw] of fields){
+      const ya=parseFloat(yRaw);
+      if(isNaN(ya)||ya<=0) continue;
+      // For NO price: try direct field, else derive from YES (1-yes)
+      let na=parseFloat(nRaw);
+      if(isNaN(na)||na<=0) na=parseFloat((1-ya).toFixed(4));
+      if(ya>0.02&&ya<0.98&&na>0.02&&na<0.98) return {ya,na};
+    }
+    // Last resort: check notional_value and derive
+    const notional=parseFloat(m.notional_value_dollars||m.notional_value);
+    if(!isNaN(notional)&&notional>0&&notional<1){
+      const ya=notional;
+      const na=parseFloat((1-ya).toFixed(4));
+      if(ya>0.02&&ya<0.98) return {ya,na};
+    }
     return null;
   }
 
