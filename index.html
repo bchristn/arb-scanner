@@ -476,35 +476,23 @@ function analyzeCross(){
   // Pre-process active Kalshi markets
   // Try every possible Kalshi price field name
   function getKalshiPrices(m){
-    // Kalshi API returns prices in various formats - try all known field names
+    // Kalshi uses yes_bid_dollars/no_bid_dollars as the primary price fields
     const fields=[
-      // Dollars format (newer)
+      [m.yes_bid_dollars, m.no_bid_dollars],
       [m.yes_ask_dollars, m.no_ask_dollars],
-      // Non-dollar format
+      [m.yes_bid, m.no_bid],
       [m.yes_ask, m.no_ask],
-      // Price format
       [m.yes_price, m.no_price],
-      // Last price
       [m.last_yes_price, m.last_no_price],
-      // Best ask
-      [m.best_yes_ask, m.best_no_ask],
-      // Previous price as fallback
-      [m.previous_price, null],
+      [m.previous_yes_bid, m.previous_no_bid],
+      [m.previous_yes_ask, m.previous_no_ask],
     ];
     for(const [yRaw,nRaw] of fields){
       const ya=parseFloat(yRaw);
-      if(isNaN(ya)||ya<=0) continue;
-      // For NO price: try direct field, else derive from YES (1-yes)
+      if(isNaN(ya)||ya<=0||ya>=1) continue;
       let na=parseFloat(nRaw);
       if(isNaN(na)||na<=0) na=parseFloat((1-ya).toFixed(4));
       if(ya>0.02&&ya<0.98&&na>0.02&&na<0.98) return {ya,na};
-    }
-    // Last resort: check notional_value and derive
-    const notional=parseFloat(m.notional_value_dollars||m.notional_value);
-    if(!isNaN(notional)&&notional>0&&notional<1){
-      const ya=notional;
-      const na=parseFloat((1-ya).toFixed(4));
-      if(ya>0.02&&ya<0.98) return {ya,na};
     }
     return null;
   }
